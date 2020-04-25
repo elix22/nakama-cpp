@@ -38,7 +38,7 @@ void test_rpc()
         /////////////////////////////////////////////////////////////////
         // REST or gRPC rpc tests
         /////////////////////////////////////////////////////////////////
-        taskExecutor.addTask([&test]()
+        /*taskExecutor.addTask([&test]()
         {
             auto successCallback = [&test](const NRpc& rpc)
             {
@@ -196,7 +196,40 @@ void test_rpc()
                 "clientrpc.rpc_get",
                 "{}",
                 successCallback);
-        });
+        });*/
+
+        taskExecutor.addTask([&test]()
+            {
+                auto successCallback = [&test](const NRpc& rpc)
+                {
+                    std::cout << "rpc response: " << rpc.payload << std::endl;
+                    NTEST_ASSERT(!rpc.payload.empty());
+                    TaskExecutor::instance().currentTaskCompleted();
+                };
+
+                auto jstr = R"( {"abdefawdc":"233"} )";
+                test.client->rpc(
+                    test.session,
+                    "exec_rpc",
+                    jstr,
+                    successCallback);
+            });
+
+        taskExecutor.addTask([&test]()
+            {
+                auto successCallback = [&test](const NRpc& rpc)
+                {
+                    std::cout << "rpc response: " << rpc.payload << std::endl;
+                    NTEST_ASSERT(!rpc.payload.empty());
+                    TaskExecutor::instance().currentTaskCompleted();
+                };
+
+                auto jstr = R"( {"abdefawdc":"233"} )";
+                test.rtClient->rpc(
+                    "exec_rpc",
+                    jstr,
+                    successCallback);
+            });
 
         // test completion task, must be last task
         taskExecutor.addTask([&test]()

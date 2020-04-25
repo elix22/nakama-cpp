@@ -106,24 +106,24 @@ void NCppTest::tick()
 
 int runAllTests()
 {
-    test_authentication();
-    test_getAccount();
-    test_disconnect();
-    test_errors();
-    test_restoreSession();
-    test_storage();
-    test_groups();
+    //test_authentication();
+    //test_getAccount();
+    //test_disconnect();
+    //test_errors();
+    //test_restoreSession();
+    //test_storage();
+    //test_groups();
     test_realtime();
 
 #ifdef BUILD_C_API
-    ctest_authentication();
-    ctest_realtime();
-
-    c_test_pure();
-
-    wrapper_test_authentication();
-    wrapper_test_account();
-    wrapper_test_realtime();
+    //ctest_authentication();
+    //ctest_realtime();
+    //
+    //c_test_pure();
+    //
+    //wrapper_test_authentication();
+    //wrapper_test_account();
+    //wrapper_test_realtime();
 #endif // BUILD_C_API
 
     // total stats
