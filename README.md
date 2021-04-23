@@ -32,7 +32,7 @@ You'll need to setup the server and database before you can connect with the cli
 - Android - Android 4.1 (armeabi-v7a, arm64-v8a, x86, x86_64)
 - Linux - Ubuntu 18.04 x64
 - Mac - 10.10+
-- iOS - 5.0+ (arm64, armv7, armv7s, x86_64), Bitcode is off
+- iOS - 8.0+ (arm64, armv7, armv7s, x86_64), Bitcode is off
 
 In theory any platform that meets the requirement for `cpprest` and `boost` is also supported. The client is compiled with C++11.
 
@@ -54,7 +54,7 @@ We don't recommend to copy Nakama C++ SDK to your project because it's quite big
     - `NAKAMA_CPP_SDK/libs/ios` - for iOS
     - `NAKAMA_CPP_SDK/libs/mac` - for Mac
 
-3. In `General > Linked Frameworks and Libraries` add following:
+3. In `General > Frameworks, Libraries, and Embedded Content` add following:
     - all `.a` files located in libs folder
     - `foundation` and `security` frameworks
 
@@ -135,7 +135,7 @@ In `Project Settings` add following:
     - `NAKAMA_CPP_SDK/libs/win64/v141` - for VS 2017 x64
     - `NAKAMA_CPP_SDK/libs/win32/v142` - for VS 2019 x86
     - `NAKAMA_CPP_SDK/libs/win64/v142` - for VS 2019 x64
-3. Add all `.lib` files located in libs folder in `Linker > Input > Additional Dependencies`
+3. Add the `.lib` files in your Debug libs folder to `Linker > Input > Additional Dependencies` for your Debug configuration. Do the same for your Release libs and configuration.
 
 ### Custom setup
 

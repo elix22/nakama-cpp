@@ -265,6 +265,28 @@ void NClient_authenticateGameCenter(
         Nakama::createErrorCallback(client, reqData, errorCallback));
 }
 
+void NClient_authenticateApple(
+    NClient client,
+    const char* token,
+    const char* username,
+    bool create,
+    NStringMap vars,
+    NClientReqData reqData,
+    NSessionCallback successCallback,
+    NClientErrorCallback errorCallback)
+{
+    Nakama::NClientInterface* cppClient = getCppClient(client);
+    Nakama::NStringMap* cppVars = Nakama::findNStringMap(vars);
+
+    cppClient->authenticateApple(
+        token,
+        username ? username : "",
+        create,
+        cppVars ? *cppVars : Nakama::NStringMap(),
+        Nakama::createAuthSuccessCallback(client, reqData, successCallback),
+        Nakama::createErrorCallback(client, reqData, errorCallback));
+}
+
 void NClient_authenticateCustom(
     NClient client,
     const char* id,
@@ -374,6 +396,18 @@ void NClient_linkGameCenter(NClient client, NSession session, const char* player
         Nakama::createErrorCallback(client, reqData, errorCallback));
 }
 
+void NClient_linkApple(NClient client, NSession session, const char* token, NClientReqData reqData, void(*successCallback)(NClient, NClientReqData), NClientErrorCallback errorCallback)
+{
+    Nakama::NClientInterface* cppClient = getCppClient(client);
+    auto cppSession = Nakama::getSession(session);
+
+    cppClient->linkApple(
+        cppSession,
+        token,
+        Nakama::createOkEmptyCallback(client, reqData, successCallback),
+        Nakama::createErrorCallback(client, reqData, errorCallback));
+}
+
 void NClient_linkSteam(NClient client, NSession session, const char* token, NClientReqData reqData, void (*successCallback)(NClient, NClientReqData), NClientErrorCallback errorCallback)
 {
     Nakama::NClientInterface* cppClient = getCppClient(client);
@@ -457,6 +491,18 @@ void NClient_unlinkGameCenter(
         salt,
         signature,
         publicKeyUrl,
+        Nakama::createOkEmptyCallback(client, reqData, successCallback),
+        Nakama::createErrorCallback(client, reqData, errorCallback));
+}
+
+void NClient_unlinkApple(NClient client, NSession session, const char* token, NClientReqData reqData, void(*successCallback)(NClient, NClientReqData), NClientErrorCallback errorCallback)
+{
+    Nakama::NClientInterface* cppClient = getCppClient(client);
+    auto cppSession = Nakama::getSession(session);
+
+    cppClient->unlinkApple(
+        cppSession,
+        token,
         Nakama::createOkEmptyCallback(client, reqData, successCallback),
         Nakama::createErrorCallback(client, reqData, errorCallback));
 }
@@ -974,6 +1020,28 @@ void NClient_promoteGroupUsers(
     Nakama::assign(cppIds, ids, idsCount);
 
     cppClient->promoteGroupUsers(
+        cppSession,
+        groupId,
+        cppIds,
+        Nakama::createOkEmptyCallback(client, reqData, successCallback),
+        Nakama::createErrorCallback(client, reqData, errorCallback));
+}
+
+void NClient_demoteGroupUsers(
+    NClient client,
+    NSession session,
+    const char* groupId,
+    const char** ids, uint16_t idsCount,
+    NClientReqData reqData,
+    void(*successCallback)(NClient, NClientReqData), NClientErrorCallback errorCallback)
+{
+    Nakama::NClientInterface* cppClient = getCppClient(client);
+    auto cppSession = Nakama::getSession(session);
+    std::vector<std::string> cppIds;
+
+    Nakama::assign(cppIds, ids, idsCount);
+
+    cppClient->demoteGroupUsers(
         cppSession,
         groupId,
         cppIds,
@@ -1555,6 +1623,32 @@ void NClient_rpc(
 
     cppClient->rpc(
         cppSession,
+        id,
+        payload ? Nakama::opt::optional<std::string>(payload) : Nakama::opt::nullopt,
+        [client, reqData, successCallback](const Nakama::NRpc& rpc)
+        {
+            if (successCallback)
+            {
+                sNRpc cRpc;
+                Nakama::assign(cRpc, rpc);
+                successCallback(client, reqData, &cRpc);
+            }
+        },
+        Nakama::createErrorCallback(client, reqData, errorCallback));
+}
+
+void NClient_rpc_with_http_key(
+    NClient client,
+    const char* http_key,
+    const char* id,
+    const char* payload,
+    NClientReqData reqData,
+    void(*successCallback)(NClient, NClientReqData, const sNRpc*), NClientErrorCallback errorCallback)
+{
+    Nakama::NClientInterface* cppClient = getCppClient(client);
+
+    cppClient->rpc(
+        http_key,
         id,
         payload ? Nakama::opt::optional<std::string>(payload) : Nakama::opt::nullopt,
         [client, reqData, successCallback](const Nakama::NRpc& rpc)

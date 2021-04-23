@@ -120,23 +120,22 @@ void RestClient::tick()
     _httpClient->tick();
 }
 
-RestReqContext * RestClient::createReqContext(NSessionPtr session, google::protobuf::Message* data)
+RestReqContext * RestClient::createReqContext(google::protobuf::Message* data)
 {
     RestReqContext* ctx = new RestReqContext();
-
-    if (session)
-    {
-        ctx->auth.append("Bearer ").append(session->getAuthToken());
-    }
-    else
-    {
-        ctx->auth.append(_basicAuthMetadata);
-    }
-
     ctx->data = data;
-
     _reqContexts.emplace(ctx);
     return ctx;
+}
+
+void RestClient::setBasicAuth(RestReqContext* ctx)
+{
+    ctx->auth.append(_basicAuthMetadata);
+}
+
+void RestClient::setSessionAuth(RestReqContext* ctx, NSessionPtr session)
+{
+    ctx->auth.append("Bearer ").append(session->getAuthToken());
 }
 
 void RestClient::sendReq(
@@ -155,7 +154,8 @@ void RestClient::sendReq(
 
     req.headers.emplace("Accept", "application/json");
     req.headers.emplace("Content-Type", "application/json");
-    req.headers.emplace("Authorization", std::move(ctx->auth));
+    if (!ctx->auth.empty())
+        req.headers.emplace("Authorization", std::move(ctx->auth));
 
     _httpClient->request(req, [this, ctx](NHttpResponsePtr response)
     {
@@ -177,7 +177,9 @@ void RestClient::onResponse(RestReqContext* reqContext, NHttpResponsePtr respons
 
                 if (reqContext->data)
                 {
-                    auto status = google::protobuf::util::JsonStringToMessage(response->body, reqContext->data);
+                    google::protobuf::util::JsonParseOptions options;
+                    options.ignore_unknown_fields = true;
+                    auto status = google::protobuf::util::JsonStringToMessage(response->body, reqContext->data, options);
                     ok = status.ok();
 
                     if (!ok)
@@ -304,7 +306,8 @@ void RestClient::authenticateDevice(
         NLOG_INFO("...");
 
         auto sessionData(make_shared<nakama::api::Session>());
-        RestReqContext* ctx = createReqContext(nullptr, sessionData.get());
+        RestReqContext* ctx = createReqContext(sessionData.get());
+        setBasicAuth(ctx);
 
         if (successCallback)
         {
@@ -356,7 +359,8 @@ void RestClient::authenticateEmail(
         NLOG_INFO("...");
 
         auto sessionData(make_shared<nakama::api::Session>());
-        RestReqContext* ctx = createReqContext(nullptr, sessionData.get());
+        RestReqContext* ctx = createReqContext(sessionData.get());
+        setBasicAuth(ctx);
 
         if (successCallback)
         {
@@ -404,7 +408,8 @@ void RestClient::authenticateFacebook(
         NLOG_INFO("...");
 
         auto sessionData(make_shared<nakama::api::Session>());
-        RestReqContext* ctx = createReqContext(nullptr, sessionData.get());
+        RestReqContext* ctx = createReqContext(sessionData.get());
+        setBasicAuth(ctx);
 
         if (successCallback)
         {
@@ -451,7 +456,8 @@ void RestClient::authenticateGoogle(
         NLOG_INFO("...");
 
         auto sessionData(make_shared<nakama::api::Session>());
-        RestReqContext* ctx = createReqContext(nullptr, sessionData.get());
+        RestReqContext* ctx = createReqContext(sessionData.get());
+        setBasicAuth(ctx);
 
         if (successCallback)
         {
@@ -502,7 +508,8 @@ void RestClient::authenticateGameCenter(
         NLOG_INFO("...");
 
         auto sessionData(make_shared<nakama::api::Session>());
-        RestReqContext* ctx = createReqContext(nullptr, sessionData.get());
+        RestReqContext* ctx = createReqContext(sessionData.get());
+        setBasicAuth(ctx);
 
         if (successCallback)
         {
@@ -540,6 +547,52 @@ void RestClient::authenticateGameCenter(
     }
 }
 
+void RestClient::authenticateApple(
+    const std::string& token,
+    const std::string& username,
+    bool create,
+    const NStringMap& vars,
+    std::function<void(NSessionPtr)> successCallback,
+    ErrorCallback errorCallback)
+{
+    try {
+        NLOG_INFO("...");
+
+        auto sessionData(make_shared<nakama::api::Session>());
+        RestReqContext* ctx = createReqContext(sessionData.get());
+        setBasicAuth(ctx);
+
+        if (successCallback)
+        {
+            ctx->successCallback = [sessionData, successCallback]()
+            {
+                NSessionPtr session(new DefaultSession(sessionData->token(), sessionData->created()));
+                successCallback(session);
+            };
+        }
+        ctx->errorCallback = errorCallback;
+
+        NHttpQueryArgs args;
+
+        args.emplace("username", username);
+        AddBoolArg(args, "create", create);
+
+        rapidjson::Document document;
+        document.SetObject();
+
+        document.AddMember("token", token, document.GetAllocator());
+        addVarsToJsonDoc(document, vars);
+
+        string body = jsonDocToStr(document);
+
+        sendReq(ctx, NHttpReqMethod::POST, "/v2/account/authenticate/apple", std::move(body), std::move(args));
+    }
+    catch (exception& e)
+    {
+        NLOG_ERROR("exception: " + string(e.what()));
+    }
+}
+
 void RestClient::authenticateCustom(
     const std::string & id,
     const std::string & username,
@@ -553,7 +606,8 @@ void RestClient::authenticateCustom(
         NLOG_INFO("...");
 
         auto sessionData(make_shared<nakama::api::Session>());
-        RestReqContext* ctx = createReqContext(nullptr, sessionData.get());
+        RestReqContext* ctx = createReqContext(sessionData.get());
+        setBasicAuth(ctx);
 
         if (successCallback)
         {
@@ -599,7 +653,8 @@ void RestClient::authenticateSteam(
         NLOG_INFO("...");
 
         auto sessionData(make_shared<nakama::api::Session>());
-        RestReqContext* ctx = createReqContext(nullptr, sessionData.get());
+        RestReqContext* ctx = createReqContext(sessionData.get());
+        setBasicAuth(ctx);
 
         if (successCallback)
         {
@@ -641,7 +696,8 @@ void RestClient::linkFacebook(
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -674,7 +730,8 @@ void RestClient::linkEmail(
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -703,7 +760,8 @@ void RestClient::linkDevice(
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -731,7 +789,8 @@ void RestClient::linkGoogle(
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -764,7 +823,8 @@ void RestClient::linkGameCenter(
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -789,6 +849,35 @@ void RestClient::linkGameCenter(
     }
 }
 
+void RestClient::linkApple(
+    NSessionPtr session,
+    const std::string& token,
+    std::function<void()> successCallback, ErrorCallback errorCallback)
+{
+    try {
+        NLOG_INFO("...");
+
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
+
+        ctx->successCallback = successCallback;
+        ctx->errorCallback = errorCallback;
+
+        rapidjson::Document document;
+        document.SetObject();
+
+        document.AddMember("token", token, document.GetAllocator());
+
+        string body = jsonDocToStr(document);
+
+        sendReq(ctx, NHttpReqMethod::POST, "/v2/account/link/apple", std::move(body));
+    }
+    catch (exception& e)
+    {
+        NLOG_ERROR("exception: " + string(e.what()));
+    }
+}
+
 void RestClient::linkSteam(
     NSessionPtr session,
     const std::string & token,
@@ -797,7 +886,8 @@ void RestClient::linkSteam(
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -822,7 +912,8 @@ void RestClient::linkCustom(NSessionPtr session, const std::string & id, std::fu
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -847,7 +938,8 @@ void RestClient::unlinkFacebook(NSessionPtr session, const std::string & accessT
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -872,7 +964,8 @@ void RestClient::unlinkEmail(NSessionPtr session, const std::string & email, con
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -898,7 +991,8 @@ void RestClient::unlinkGoogle(NSessionPtr session, const std::string & accessTok
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -930,7 +1024,8 @@ void RestClient::unlinkGameCenter(NSessionPtr session,
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -955,12 +1050,39 @@ void RestClient::unlinkGameCenter(NSessionPtr session,
     }
 }
 
+void RestClient::unlinkApple(NSessionPtr session, const std::string& token, std::function<void()> successCallback, ErrorCallback errorCallback)
+{
+    try {
+        NLOG_INFO("...");
+
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
+
+        ctx->successCallback = successCallback;
+        ctx->errorCallback = errorCallback;
+
+        rapidjson::Document document;
+        document.SetObject();
+
+        document.AddMember("token", token, document.GetAllocator());
+
+        string body = jsonDocToStr(document);
+
+        sendReq(ctx, NHttpReqMethod::POST, "/v2/account/unlink/apple", std::move(body));
+    }
+    catch (exception& e)
+    {
+        NLOG_ERROR("exception: " + string(e.what()));
+    }
+}
+
 void RestClient::unlinkSteam(NSessionPtr session, const std::string & token, std::function<void()> successCallback, ErrorCallback errorCallback)
 {
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -985,7 +1107,8 @@ void RestClient::unlinkDevice(NSessionPtr session, const std::string & id, std::
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -1010,7 +1133,8 @@ void RestClient::unlinkCustom(NSessionPtr session, const std::string & id, std::
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -1039,7 +1163,8 @@ void RestClient::importFacebookFriends(
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -1072,7 +1197,8 @@ void RestClient::getAccount(
         NLOG_INFO("...");
 
         auto accoutData(make_shared<nakama::api::Account>());
-        RestReqContext* ctx = createReqContext(session, accoutData.get());
+        RestReqContext* ctx = createReqContext(accoutData.get());
+        setSessionAuth(ctx, session);
 
         if (successCallback)
         {
@@ -1106,7 +1232,8 @@ void RestClient::updateAccount(
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -1143,7 +1270,8 @@ void RestClient::getUsers(
         NLOG_INFO("...");
 
         auto usersData(make_shared<nakama::api::Users>());
-        RestReqContext* ctx = createReqContext(session, usersData.get());
+        RestReqContext* ctx = createReqContext(usersData.get());
+        setSessionAuth(ctx, session);
 
         if (successCallback)
         {
@@ -1191,7 +1319,8 @@ void RestClient::addFriends(
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -1226,7 +1355,8 @@ void RestClient::deleteFriends(
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -1261,7 +1391,8 @@ void RestClient::blockFriends(
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -1297,7 +1428,8 @@ void RestClient::listFriends(
         NLOG_INFO("...");
 
         auto data(make_shared<nakama::api::FriendList>());
-        RestReqContext* ctx = createReqContext(session, data.get());
+        RestReqContext* ctx = createReqContext(data.get());
+        setSessionAuth(ctx, session);
 
         if (successCallback)
         {
@@ -1339,7 +1471,8 @@ void RestClient::createGroup(
         NLOG_INFO("...");
 
         auto groupData(make_shared<nakama::api::Group>());
-        RestReqContext* ctx = createReqContext(session, groupData.get());
+        RestReqContext* ctx = createReqContext(groupData.get());
+        setSessionAuth(ctx, session);
 
         if (successCallback)
         {
@@ -1381,7 +1514,8 @@ void RestClient::deleteGroup(
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -1404,7 +1538,8 @@ void RestClient::addGroupUsers(
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -1436,7 +1571,8 @@ void RestClient::listGroupUsers(
         NLOG_INFO("...");
 
         auto groupData(make_shared<nakama::api::GroupUserList>());
-        RestReqContext* ctx = createReqContext(session, groupData.get());
+        RestReqContext* ctx = createReqContext(groupData.get());
+        setSessionAuth(ctx, session);
 
         if (successCallback)
         {
@@ -1468,7 +1604,8 @@ void RestClient::kickGroupUsers(NSessionPtr session, const std::string & groupId
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -1493,7 +1630,8 @@ void RestClient::joinGroup(NSessionPtr session, const std::string & groupId, std
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -1511,7 +1649,8 @@ void RestClient::leaveGroup(NSessionPtr session, const std::string & groupId, st
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -1530,7 +1669,8 @@ void RestClient::listGroups(NSessionPtr session, const std::string & name, int32
         NLOG_INFO("...");
 
         auto groupData(make_shared<nakama::api::GroupList>());
-        RestReqContext* ctx = createReqContext(session, groupData.get());
+        RestReqContext* ctx = createReqContext(groupData.get());
+        setSessionAuth(ctx, session);
 
         if (successCallback)
         {
@@ -1593,7 +1733,8 @@ void RestClient::listUserGroups(
         NLOG_INFO("...");
 
         auto groupData(make_shared<nakama::api::UserGroupList>());
-        RestReqContext* ctx = createReqContext(session, groupData.get());
+        RestReqContext* ctx = createReqContext(groupData.get());
+        setSessionAuth(ctx, session);
 
         if (successCallback)
         {
@@ -1625,7 +1766,8 @@ void RestClient::promoteGroupUsers(NSessionPtr session, const std::string & grou
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -1638,6 +1780,37 @@ void RestClient::promoteGroupUsers(NSessionPtr session, const std::string & grou
         }
 
         sendReq(ctx, NHttpReqMethod::POST, "/v2/group/" + groupId + "/promote", "", std::move(args));
+    }
+    catch (exception& e)
+    {
+        NLOG_ERROR("exception: " + string(e.what()));
+    }
+}
+
+void RestClient::demoteGroupUsers(
+    NSessionPtr session,
+    const std::string& groupId,
+    const std::vector<std::string>& ids,
+    std::function<void()> successCallback,
+    ErrorCallback errorCallback)
+{
+    try {
+        NLOG_INFO("...");
+
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
+
+        ctx->successCallback = successCallback;
+        ctx->errorCallback = errorCallback;
+
+        NHttpQueryArgs args;
+
+        for (auto& id : ids)
+        {
+            args.emplace("user_ids", id);
+        }
+
+        sendReq(ctx, NHttpReqMethod::POST, "/v2/group/" + groupId + "/demote", "", std::move(args));
     }
     catch (exception& e)
     {
@@ -1659,7 +1832,8 @@ void RestClient::updateGroup(
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -1696,7 +1870,8 @@ void RestClient::listLeaderboardRecords(
         NLOG_INFO("...");
 
         auto data(make_shared<nakama::api::LeaderboardRecordList>());
-        RestReqContext* ctx = createReqContext(session, data.get());
+        RestReqContext* ctx = createReqContext(data.get());
+        setSessionAuth(ctx, session);
 
         if (successCallback)
         {
@@ -1738,7 +1913,8 @@ void RestClient::listLeaderboardRecordsAroundOwner(
         NLOG_INFO("...");
 
         auto data(make_shared<nakama::api::LeaderboardRecordList>());
-        RestReqContext* ctx = createReqContext(session, data.get());
+        RestReqContext* ctx = createReqContext(data.get());
+        setSessionAuth(ctx, session);
 
         if (successCallback)
         {
@@ -1775,7 +1951,8 @@ void RestClient::writeLeaderboardRecord(
         NLOG_INFO("...");
 
         auto data(make_shared<nakama::api::LeaderboardRecord>());
-        RestReqContext* ctx = createReqContext(session, data.get());
+        RestReqContext* ctx = createReqContext(data.get());
+        setSessionAuth(ctx, session);
 
         if (successCallback)
         {
@@ -1817,7 +1994,8 @@ void RestClient::writeTournamentRecord(
         NLOG_INFO("...");
 
         auto data(make_shared<nakama::api::LeaderboardRecord>());
-        RestReqContext* ctx = createReqContext(session, data.get());
+        RestReqContext* ctx = createReqContext(data.get());
+        setSessionAuth(ctx, session);
 
         if (successCallback)
         {
@@ -1852,7 +2030,8 @@ void RestClient::deleteLeaderboardRecord(NSessionPtr session, const std::string 
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -1878,7 +2057,8 @@ void RestClient::listMatches(
         NLOG_INFO("...");
 
         auto data(make_shared<nakama::api::MatchList>());
-        RestReqContext* ctx = createReqContext(session, data.get());
+        RestReqContext* ctx = createReqContext(data.get());
+        setSessionAuth(ctx, session);
 
         if (successCallback)
         {
@@ -1917,7 +2097,8 @@ void RestClient::listNotifications(
         NLOG_INFO("...");
 
         auto data(make_shared<nakama::api::NotificationList>());
-        RestReqContext* ctx = createReqContext(session, data.get());
+        RestReqContext* ctx = createReqContext(data.get());
+        setSessionAuth(ctx, session);
 
         if (successCallback)
         {
@@ -1948,7 +2129,8 @@ void RestClient::deleteNotifications(NSessionPtr session, const std::vector<std:
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         if (successCallback)
         {
@@ -1986,7 +2168,8 @@ void RestClient::listChannelMessages(
         NLOG_INFO("...");
 
         auto data(make_shared<nakama::api::ChannelMessageList>());
-        RestReqContext* ctx = createReqContext(session, data.get());
+        RestReqContext* ctx = createReqContext(data.get());
+        setSessionAuth(ctx, session);
 
         if (successCallback)
         {
@@ -2027,7 +2210,8 @@ void RestClient::listTournaments(
         NLOG_INFO("...");
 
         auto data(make_shared<nakama::api::TournamentList>());
-        RestReqContext* ctx = createReqContext(session, data.get());
+        RestReqContext* ctx = createReqContext(data.get());
+        setSessionAuth(ctx, session);
 
         if (successCallback)
         {
@@ -2069,7 +2253,8 @@ void RestClient::listTournamentRecords(
         NLOG_INFO("...");
 
         auto data(make_shared<nakama::api::TournamentRecordList>());
-        RestReqContext* ctx = createReqContext(session, data.get());
+        RestReqContext* ctx = createReqContext(data.get());
+        setSessionAuth(ctx, session);
 
         if (successCallback)
         {
@@ -2111,7 +2296,8 @@ void RestClient::listTournamentRecordsAroundOwner(
         NLOG_INFO("...");
 
         auto data(make_shared<nakama::api::TournamentRecordList>());
-        RestReqContext* ctx = createReqContext(session, data.get());
+        RestReqContext* ctx = createReqContext(data.get());
+        setSessionAuth(ctx, session);
 
         if (successCallback)
         {
@@ -2141,7 +2327,8 @@ void RestClient::joinTournament(NSessionPtr session, const std::string & tournam
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -2165,7 +2352,8 @@ void RestClient::listStorageObjects(
         NLOG_INFO("...");
 
         auto data(make_shared<nakama::api::StorageObjectList>());
-        RestReqContext* ctx = createReqContext(session, data.get());
+        RestReqContext* ctx = createReqContext(data.get());
+        setSessionAuth(ctx, session);
 
         if (successCallback)
         {
@@ -2203,7 +2391,8 @@ void RestClient::listUsersStorageObjects(
         NLOG_INFO("...");
 
         auto data(make_shared<nakama::api::StorageObjectList>());
-        RestReqContext* ctx = createReqContext(session, data.get());
+        RestReqContext* ctx = createReqContext(data.get());
+        setSessionAuth(ctx, session);
 
         if (successCallback)
         {
@@ -2239,7 +2428,8 @@ void RestClient::writeStorageObjects(
         NLOG_INFO("...");
 
         auto data(make_shared<nakama::api::StorageObjectAcks>());
-        RestReqContext* ctx = createReqContext(session, data.get());
+        RestReqContext* ctx = createReqContext(data.get());
+        setSessionAuth(ctx, session);
 
         if (successCallback)
         {
@@ -2297,7 +2487,8 @@ void RestClient::readStorageObjects(
         NLOG_INFO("...");
 
         auto data(make_shared<nakama::api::StorageObjects>());
-        RestReqContext* ctx = createReqContext(session, data.get());
+        RestReqContext* ctx = createReqContext(data.get());
+        setSessionAuth(ctx, session);
 
         if (successCallback)
         {
@@ -2344,7 +2535,8 @@ void RestClient::deleteStorageObjects(NSessionPtr session, const std::vector<NDe
     try {
         NLOG_INFO("...");
 
-        RestReqContext* ctx = createReqContext(session, nullptr);
+        RestReqContext* ctx = createReqContext(nullptr);
+        setSessionAuth(ctx, session);
 
         ctx->successCallback = successCallback;
         ctx->errorCallback = errorCallback;
@@ -2388,7 +2580,8 @@ void RestClient::rpc(
         NLOG_INFO("...");
 
         auto data(make_shared<nakama::api::Rpc>());
-        RestReqContext* ctx = createReqContext(session, data.get());
+        RestReqContext* ctx = createReqContext(data.get());
+        setSessionAuth(ctx, session);
 
         if (successCallback)
         {
@@ -2401,27 +2594,7 @@ void RestClient::rpc(
         }
         ctx->errorCallback = errorCallback;
 
-        string body;
-        string path("/v2/rpc/");
-
-        path.append(id);
-
-        if (payload && !payload.value().empty())
-        {
-            rapidjson::StringBuffer buffer;
-            rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-            rapidjson::Value jsonString;
-            jsonString.SetString(payload.value().c_str(), (rapidjson::SizeType)payload.value().size());
-            jsonString.Accept(writer);
-            body = buffer.GetString();
-            sendReq(ctx, NHttpReqMethod::POST, std::move(path), std::move(body));
-        }
-        else
-        {
-            NHttpQueryArgs args;
-            args.emplace("id", id);
-            sendReq(ctx, NHttpReqMethod::GET, std::move(path), std::move(body), std::move(args));
-        }
+        sendRpc(ctx, id, payload, {});
     }
     catch (exception& e)
     {
@@ -2429,6 +2602,62 @@ void RestClient::rpc(
     }
 }
 
+void RestClient::rpc(
+    const std::string& http_key,
+    const std::string& id,
+    const opt::optional<std::string>& payload,
+    std::function<void(const NRpc&)> successCallback, ErrorCallback errorCallback)
+{
+    try {
+        NLOG_INFO("...");
+
+        auto data(make_shared<nakama::api::Rpc>());
+        RestReqContext* ctx = createReqContext(data.get());
+
+        if (successCallback)
+        {
+            ctx->successCallback = [data, successCallback]()
+            {
+                NRpc rpc;
+                assign(rpc, *data);
+                successCallback(rpc);
+            };
+        }
+        ctx->errorCallback = errorCallback;
+
+        NHttpQueryArgs args;
+        args.emplace("http_key", http_key);
+
+        sendRpc(ctx, id, payload, std::move(args));
+    }
+    catch (exception& e)
+    {
+        NLOG_ERROR("exception: " + string(e.what()));
+    }
 }
+
+void RestClient::sendRpc(RestReqContext* ctx, const std::string& id, const opt::optional<std::string>& payload, NHttpQueryArgs&& args)
+{
+    string path("/v2/rpc/");
+    path.append(id);
+
+    if (payload && !payload.value().empty())
+    {
+        rapidjson::StringBuffer buffer;
+        rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+        rapidjson::Value jsonString;
+        jsonString.SetString(payload.value().c_str(), (rapidjson::SizeType)payload.value().size());
+        jsonString.Accept(writer);
+        string body = buffer.GetString();
+        sendReq(ctx, NHttpReqMethod::POST, std::move(path), std::move(body), std::move(args));
+    }
+    else
+    {
+        args.emplace("id", id);
+        sendReq(ctx, NHttpReqMethod::GET, std::move(path), {}, std::move(args));
+    }
+}
+
+} // namespace Nakama
 
 #endif // BUILD_REST_CLIENT

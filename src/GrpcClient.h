@@ -96,6 +96,15 @@ namespace Nakama {
             ErrorCallback errorCallback
         ) override;
 
+        void authenticateApple(
+            const std::string& token,
+            const std::string& username,
+            bool create,
+            const NStringMap& vars,
+            std::function<void(NSessionPtr)> successCallback,
+            ErrorCallback errorCallback
+        ) override;
+
         void authenticateCustom(
             const std::string& id,
             const std::string& username,
@@ -156,6 +165,13 @@ namespace Nakama {
             ErrorCallback errorCallback
         ) override;
 
+        void linkApple(
+            NSessionPtr session,
+            const std::string& token,
+            std::function<void()> successCallback,
+            ErrorCallback errorCallback
+        ) override;
+
         void linkSteam(
             NSessionPtr session,
             const std::string& token,
@@ -200,6 +216,13 @@ namespace Nakama {
             const std::string& salt,
             const std::string& signature,
             const std::string& publicKeyUrl,
+            std::function<void()> successCallback,
+            ErrorCallback errorCallback
+        ) override;
+
+        void unlinkApple(
+            NSessionPtr session,
+            const std::string& token,
             std::function<void()> successCallback,
             ErrorCallback errorCallback
         ) override;
@@ -388,6 +411,14 @@ namespace Nakama {
             ErrorCallback errorCallback
         ) override;
 
+        void demoteGroupUsers(
+            NSessionPtr session,
+            const std::string& groupId,
+            const std::vector<std::string>& ids,
+            std::function<void()> successCallback,
+            ErrorCallback errorCallback
+        ) override;
+
         void updateGroup(
             NSessionPtr session,
             const std::string& groupId,
@@ -568,8 +599,18 @@ namespace Nakama {
             ErrorCallback errorCallback
         ) override;
 
+        void rpc(
+            const std::string& http_key,
+            const std::string& id,
+            const opt::optional<std::string>& payload,
+            std::function<void(const NRpc&)> successCallback,
+            ErrorCallback errorCallback
+        ) override;
+
     private:
-        ReqContext* createReqContext(NSessionPtr session);
+        ReqContext* createReqContext();
+        void setBasicAuth(ReqContext* ctx);
+        void setSessionAuth(ReqContext* ctx, NSessionPtr session);
         void onResponse(void* tag, bool ok);
         void reqError(ReqContext* reqContext, const NError& error);
 

@@ -63,9 +63,10 @@ void assign(NBytes & bytes, const std::string & str)
 void assign(NAccount& account, const nakama::api::Account& data)
 {
     assign(account.user.id, data.user().id());
-    assign(account.custom_id, data.custom_id());
+    assign(account.customId, data.custom_id());
     assign(account.email, data.email());
     assign(account.verifyTime, data.verify_time());
+    assign(account.disableTime, data.disable_time());
     assign(account.wallet, data.wallet());
     assign(account.user, data.user());
     assign(account.devices, data.devices());
@@ -84,6 +85,7 @@ void assign(NUser& user, const nakama::api::User& data)
     assign(user.facebookId, data.facebook_id());
     assign(user.googleId, data.google_id());
     assign(user.gameCenterId, data.gamecenter_id());
+    assign(user.appleId, data.apple_id());
     assign(user.steamId, data.steam_id());
     assign(user.online, data.online());
     assign(user.edgeCount, data.edge_count());
@@ -151,6 +153,7 @@ void assign(NFriend & afriend, const nakama::api::Friend & data)
 {
     assign(afriend.user, data.user());
     afriend.state = static_cast<NFriend::State>(data.state().value());
+    assign(afriend.updateTime, data.update_time());
 }
 
 void assign(NFriendList & friends, const nakama::api::FriendList & data)

@@ -214,6 +214,7 @@ void assign(sNUser& cUser, const Nakama::NUser& user)
     assign(cUser.facebookId, user.facebookId);
     assign(cUser.googleId, user.googleId);
     assign(cUser.gameCenterId , user.gameCenterId);
+    assign(cUser.appleId, user.appleId);
     assign(cUser.steamId, user.steamId);
     cUser.online = user.online;
     cUser.edgeCount = user.edgeCount;
@@ -248,8 +249,9 @@ void assign(sNAccount& cAccount, const Nakama::NAccount& account)
     assign(cAccount.wallet, account.wallet);
     assign(cAccount.email, account.email);
     assign(cAccount.devices, cAccount.devicesCount, account.devices);
-    assign(cAccount.custom_id, account.custom_id);
+    assign(cAccount.customId, account.customId);
     cAccount.verifyTime = account.verifyTime;
+    cAccount.disableTime = account.disableTime;
 }
 
 void assign(sNUsers& cUsers, const Nakama::NUsers& users)
@@ -271,6 +273,7 @@ void assign(sNUsers& cUsers, const Nakama::NUsers& users)
 void assign(sNFriend& cFriend, const Nakama::NFriend& aFriend)
 {
     cFriend.state = (eFriendState)aFriend.state;
+    cFriend.updateTime = aFriend.updateTime;
     assign(cFriend.user, aFriend.user);
 }
 

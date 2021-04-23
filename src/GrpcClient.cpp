@@ -134,21 +134,21 @@ void GrpcClient::tick()
     } while (continueLoop);
 }
 
-ReqContext * GrpcClient::createReqContext(NSessionPtr session)
+ReqContext * GrpcClient::createReqContext()
 {
     ReqContext* ctx = new ReqContext();
-
-    if (session)
-    {
-        ctx->context.AddMetadata("authorization", "Bearer " + session->getAuthToken());
-    }
-    else
-    {
-        ctx->context.AddMetadata("authorization", _basicAuthMetadata);
-    }
-
     _reqContexts.emplace(ctx);
     return ctx;
+}
+
+void GrpcClient::setBasicAuth(ReqContext* ctx)
+{
+    ctx->context.AddMetadata("authorization", _basicAuthMetadata);
+}
+
+void GrpcClient::setSessionAuth(ReqContext* ctx, NSessionPtr session)
+{
+    ctx->context.AddMetadata("authorization", "Bearer " + session->getAuthToken());
 }
 
 void GrpcClient::onResponse(void * tag, bool ok)
@@ -242,7 +242,8 @@ void GrpcClient::authenticateDevice(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(nullptr);
+    ReqContext* ctx = createReqContext();
+    setBasicAuth(ctx);
     auto sessionData(make_shared<nakama::api::Session>());
 
     if (successCallback)
@@ -284,7 +285,8 @@ void GrpcClient::authenticateEmail(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(nullptr);
+    ReqContext* ctx = createReqContext();
+    setBasicAuth(ctx);
     auto sessionData(make_shared<nakama::api::Session>());
 
     if (successCallback)
@@ -327,7 +329,8 @@ void GrpcClient::authenticateFacebook(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(nullptr);
+    ReqContext* ctx = createReqContext();
+    setBasicAuth(ctx);
     auto sessionData(make_shared<nakama::api::Session>());
 
     if (successCallback)
@@ -369,7 +372,8 @@ void GrpcClient::authenticateGoogle(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(nullptr);
+    ReqContext* ctx = createReqContext();
+    setBasicAuth(ctx);
     auto sessionData(make_shared<nakama::api::Session>());
 
     if (successCallback)
@@ -415,7 +419,8 @@ void GrpcClient::authenticateGameCenter(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(nullptr);
+    ReqContext* ctx = createReqContext();
+    setBasicAuth(ctx);
     auto sessionData(make_shared<nakama::api::Session>());
 
     if (successCallback)
@@ -456,6 +461,47 @@ void GrpcClient::authenticateGameCenter(
     responseReader->Finish(&(*sessionData), &ctx->status, (void*)ctx);
 }
 
+void GrpcClient::authenticateApple(
+    const std::string& token,
+    const std::string& username,
+    bool create,
+    const NStringMap& vars,
+    std::function<void(NSessionPtr)> successCallback,
+    ErrorCallback errorCallback)
+{
+    NLOG_INFO("...");
+
+    ReqContext* ctx = createReqContext();
+    setBasicAuth(ctx);
+    auto sessionData(make_shared<nakama::api::Session>());
+
+    if (successCallback)
+    {
+        ctx->successCallback = [sessionData, successCallback]()
+        {
+            NSessionPtr session(new DefaultSession(sessionData->token(), sessionData->created()));
+            successCallback(session);
+        };
+    }
+    ctx->errorCallback = errorCallback;
+
+    nakama::api::AuthenticateAppleRequest req;
+
+    auto* account = req.mutable_account();
+    account->set_token(token);
+    if (!username.empty()) req.set_username(username);
+    req.mutable_create()->set_value(create);
+
+    for (auto& p : vars)
+    {
+        (*account->mutable_vars())[p.first] = p.second;
+    }
+
+    auto responseReader = _stub->AsyncAuthenticateApple(&ctx->context, req, &_cq);
+
+    responseReader->Finish(&(*sessionData), &ctx->status, (void*)ctx);
+}
+
 void GrpcClient::authenticateCustom(
     const std::string & id,
     const std::string & username,
@@ -467,7 +513,8 @@ void GrpcClient::authenticateCustom(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(nullptr);
+    ReqContext* ctx = createReqContext();
+    setBasicAuth(ctx);
     auto sessionData(make_shared<nakama::api::Session>());
 
     if (successCallback)
@@ -508,7 +555,8 @@ void GrpcClient::authenticateSteam(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(nullptr);
+    ReqContext* ctx = createReqContext();
+    setBasicAuth(ctx);
     auto sessionData(make_shared<nakama::api::Session>());
 
     if (successCallback)
@@ -546,7 +594,8 @@ void GrpcClient::linkFacebook(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -569,7 +618,8 @@ void GrpcClient::linkEmail(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -591,7 +641,8 @@ void GrpcClient::linkDevice(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -612,7 +663,8 @@ void GrpcClient::linkGoogle(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -638,7 +690,8 @@ void GrpcClient::linkGameCenter(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -657,6 +710,28 @@ void GrpcClient::linkGameCenter(
     responseReader->Finish(&_emptyData, &ctx->status, (void*)ctx);
 }
 
+void GrpcClient::linkApple(
+    NSessionPtr session,
+    const std::string& token,
+    std::function<void()> successCallback, ErrorCallback errorCallback)
+{
+    NLOG_INFO("...");
+
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
+
+    ctx->successCallback = successCallback;
+    ctx->errorCallback = errorCallback;
+
+    nakama::api::AccountApple req;
+
+    req.set_token(token);
+
+    auto responseReader = _stub->AsyncLinkApple(&ctx->context, req, &_cq);
+
+    responseReader->Finish(&_emptyData, &ctx->status, (void*)ctx);
+}
+
 void GrpcClient::linkSteam(
     NSessionPtr session,
     const std::string & token,
@@ -664,7 +739,8 @@ void GrpcClient::linkSteam(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -682,7 +758,8 @@ void GrpcClient::linkCustom(NSessionPtr session, const std::string & id, std::fu
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -700,7 +777,8 @@ void GrpcClient::unlinkFacebook(NSessionPtr session, const std::string & accessT
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -718,7 +796,8 @@ void GrpcClient::unlinkEmail(NSessionPtr session, const std::string & email, con
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -737,7 +816,8 @@ void GrpcClient::unlinkGoogle(NSessionPtr session, const std::string & accessTok
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -755,7 +835,8 @@ void GrpcClient::unlinkGameCenter(NSessionPtr session, const std::string & playe
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -774,11 +855,31 @@ void GrpcClient::unlinkGameCenter(NSessionPtr session, const std::string & playe
     responseReader->Finish(&_emptyData, &ctx->status, (void*)ctx);
 }
 
+void GrpcClient::unlinkApple(NSessionPtr session, const std::string& token, std::function<void()> successCallback, ErrorCallback errorCallback)
+{
+    NLOG_INFO("...");
+
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
+
+    ctx->successCallback = successCallback;
+    ctx->errorCallback = errorCallback;
+
+    nakama::api::AccountApple req;
+
+    req.set_token(token);
+
+    auto responseReader = _stub->AsyncUnlinkApple(&ctx->context, req, &_cq);
+
+    responseReader->Finish(&_emptyData, &ctx->status, (void*)ctx);
+}
+
 void GrpcClient::unlinkSteam(NSessionPtr session, const std::string & token, std::function<void()> successCallback, ErrorCallback errorCallback)
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -796,7 +897,8 @@ void GrpcClient::unlinkDevice(NSessionPtr session, const std::string & id, std::
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -814,7 +916,8 @@ void GrpcClient::unlinkCustom(NSessionPtr session, const std::string & id, std::
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -836,7 +939,8 @@ void GrpcClient::importFacebookFriends(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -859,7 +963,8 @@ void GrpcClient::getAccount(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
     auto accoutData(make_shared<nakama::api::Account>());
 
     if (successCallback)
@@ -890,7 +995,8 @@ void GrpcClient::updateAccount(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -920,7 +1026,8 @@ void GrpcClient::getUsers(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
     auto usersData(make_shared<nakama::api::Users>());
 
     if (successCallback)
@@ -966,7 +1073,8 @@ void GrpcClient::addFriends(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -998,7 +1106,8 @@ void GrpcClient::deleteFriends(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -1029,7 +1138,8 @@ void GrpcClient::blockFriends(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -1061,7 +1171,8 @@ void GrpcClient::listFriends(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
     auto data(make_shared<nakama::api::FriendList>());
 
     if (successCallback)
@@ -1100,7 +1211,8 @@ void GrpcClient::createGroup(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
     auto groupData(make_shared<nakama::api::Group>());
 
     if (successCallback)
@@ -1137,7 +1249,8 @@ void GrpcClient::deleteGroup(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -1161,7 +1274,8 @@ void GrpcClient::addGroupUsers(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -1192,7 +1306,8 @@ void GrpcClient::listGroupUsers(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
     auto groupData(make_shared<nakama::api::GroupUserList>());
 
     if (successCallback)
@@ -1222,7 +1337,8 @@ void GrpcClient::kickGroupUsers(NSessionPtr session, const std::string & groupId
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -1245,7 +1361,8 @@ void GrpcClient::joinGroup(NSessionPtr session, const std::string & groupId, std
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -1263,7 +1380,8 @@ void GrpcClient::leaveGroup(NSessionPtr session, const std::string & groupId, st
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -1281,7 +1399,8 @@ void GrpcClient::listGroups(NSessionPtr session, const std::string & name, int32
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
     auto groupData(make_shared<nakama::api::GroupList>());
 
     if (successCallback)
@@ -1348,7 +1467,8 @@ void GrpcClient::listUserGroups(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
     auto groupData(make_shared<nakama::api::UserGroupList>());
 
     if (successCallback)
@@ -1378,7 +1498,8 @@ void GrpcClient::promoteGroupUsers(NSessionPtr session, const std::string & grou
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -1397,6 +1518,35 @@ void GrpcClient::promoteGroupUsers(NSessionPtr session, const std::string & grou
     responseReader->Finish(&_emptyData, &ctx->status, (void*)ctx);
 }
 
+void GrpcClient::demoteGroupUsers(
+    NSessionPtr session,
+    const std::string& groupId,
+    const std::vector<std::string>& ids,
+    std::function<void()> successCallback,
+    ErrorCallback errorCallback)
+{
+    NLOG_INFO("...");
+
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
+
+    ctx->successCallback = successCallback;
+    ctx->errorCallback = errorCallback;
+
+    nakama::api::DemoteGroupUsersRequest req;
+
+    req.set_group_id(groupId);
+
+    for (auto& id : ids)
+    {
+        req.add_user_ids(id);
+    }
+
+    auto responseReader = _stub->AsyncDemoteGroupUsers(&ctx->context, req, &_cq);
+
+    responseReader->Finish(&_emptyData, &ctx->status, (void*)ctx);
+}
+
 void GrpcClient::updateGroup(
     NSessionPtr session,
     const std::string & groupId,
@@ -1411,7 +1561,8 @@ void GrpcClient::updateGroup(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -1441,7 +1592,8 @@ void GrpcClient::listLeaderboardRecords(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
     auto data(make_shared<nakama::api::LeaderboardRecordList>());
 
     if (successCallback)
@@ -1476,7 +1628,8 @@ void GrpcClient::listLeaderboardRecordsAroundOwner(NSessionPtr session, const st
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
     auto data(make_shared<nakama::api::LeaderboardRecordList>());
 
     if (successCallback)
@@ -1512,7 +1665,8 @@ void GrpcClient::writeLeaderboardRecord(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
     auto data(make_shared<nakama::api::LeaderboardRecord>());
 
     if (successCallback)
@@ -1548,7 +1702,8 @@ void GrpcClient::writeTournamentRecord(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
     auto data(make_shared<nakama::api::LeaderboardRecord>());
 
     if (successCallback)
@@ -1578,7 +1733,8 @@ void GrpcClient::deleteLeaderboardRecord(NSessionPtr session, const std::string 
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -1603,7 +1759,8 @@ void GrpcClient::listMatches(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
     auto data(make_shared<nakama::api::MatchList>());
 
     if (successCallback)
@@ -1638,7 +1795,8 @@ void GrpcClient::listNotifications(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
     auto data(make_shared<nakama::api::NotificationList>());
 
     if (successCallback)
@@ -1666,7 +1824,8 @@ void GrpcClient::deleteNotifications(NSessionPtr session, const std::vector<std:
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -1693,7 +1852,8 @@ void GrpcClient::listChannelMessages(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
     auto data(make_shared<nakama::api::ChannelMessageList>());
 
     if (successCallback)
@@ -1731,7 +1891,8 @@ void GrpcClient::listTournaments(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
     auto data(make_shared<nakama::api::TournamentList>());
 
     if (successCallback)
@@ -1769,7 +1930,8 @@ void GrpcClient::listTournamentRecords(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
     auto data(make_shared<nakama::api::TournamentRecordList>());
 
     if (successCallback)
@@ -1809,7 +1971,8 @@ void GrpcClient::listTournamentRecordsAroundOwner(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
     auto data(make_shared<nakama::api::TournamentRecordList>());
 
     if (successCallback)
@@ -1839,7 +2002,8 @@ void GrpcClient::joinTournament(NSessionPtr session, const std::string & tournam
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -1862,7 +2026,8 @@ void GrpcClient::listStorageObjects(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
     auto data(make_shared<nakama::api::StorageObjectList>());
 
     if (successCallback)
@@ -1898,7 +2063,8 @@ void GrpcClient::listUsersStorageObjects(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
     auto data(make_shared<nakama::api::StorageObjectList>());
 
     if (successCallback)
@@ -1932,7 +2098,8 @@ void GrpcClient::writeStorageObjects(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
     auto data(make_shared<nakama::api::StorageObjectAcks>());
 
     if (successCallback)
@@ -1976,7 +2143,8 @@ void GrpcClient::readStorageObjects(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
     auto data(make_shared<nakama::api::StorageObjects>());
 
     if (successCallback)
@@ -2010,7 +2178,8 @@ void GrpcClient::deleteStorageObjects(NSessionPtr session, const std::vector<NDe
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
 
     ctx->successCallback = successCallback;
     ctx->errorCallback = errorCallback;
@@ -2039,7 +2208,8 @@ void GrpcClient::rpc(
 {
     NLOG_INFO("...");
 
-    ReqContext* ctx = createReqContext(session);
+    ReqContext* ctx = createReqContext();
+    setSessionAuth(ctx, session);
     auto data(make_shared<nakama::api::Rpc>());
 
     if (successCallback)
@@ -2065,6 +2235,41 @@ void GrpcClient::rpc(
     responseReader->Finish(&(*data), &ctx->status, (void*)ctx);
 }
 
+void GrpcClient::rpc(
+    const std::string& http_key,
+    const std::string& id,
+    const opt::optional<std::string>& payload,
+    std::function<void(const NRpc&)> successCallback, ErrorCallback errorCallback)
+{
+    NLOG_INFO("...");
+
+    ReqContext* ctx = createReqContext();
+    auto data(make_shared<nakama::api::Rpc>());
+
+    if (successCallback)
+    {
+        ctx->successCallback = [data, successCallback]()
+        {
+            NRpc rpc;
+            assign(rpc, *data);
+            successCallback(rpc);
+        };
+    }
+    ctx->errorCallback = errorCallback;
+
+    nakama::api::Rpc req;
+
+    req.set_id(id);
+    req.set_http_key(http_key);
+
+    if (payload)
+        req.set_payload(*payload);
+
+    auto responseReader = _stub->AsyncRpcFunc(&ctx->context, req, &_cq);
+
+    responseReader->Finish(&(*data), &ctx->status, (void*)ctx);
 }
+
+} // namespace Nakama
 
 #endif // BUILD_GRPC_CLIENT
